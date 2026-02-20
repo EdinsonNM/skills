@@ -417,6 +417,65 @@ export interface AddOptions {
   list?: boolean;
   all?: boolean;
   fullDepth?: boolean;
+  // New options for non-interactive mode
+  nonInteractive?: boolean; // --non-interactive flag
+  scope?: 'project' | 'global'; // --scope flag
+  method?: 'symlink' | 'copy'; // --method flag
+}
+
+/**
+ * Determines if non-interactive mode is active.
+ * Non-interactive mode is activated when:
+ * - The --non-interactive flag is passed, OR
+ * - The CI environment variable is set to 'true'
+ */
+function isNonInteractiveMode(options: AddOptions): boolean {
+  return options.nonInteractive === true || process.env.CI === 'true';
+}
+
+/**
+ * Determines the installation scope (global vs project).
+ * Priority: explicit --scope flag > --global flag > non-interactive default > undefined (will prompt)
+ */
+function getInstallationScope(options: AddOptions, isNonInteractive: boolean): boolean | undefined {
+  // Explicit --scope flag takes precedence
+  if (options.scope === 'global') return true;
+  if (options.scope === 'project') return false;
+
+  // If already set via --global flag
+  if (options.global !== undefined) return options.global;
+
+  // Non-interactive default: project scope
+  if (isNonInteractive) return false;
+
+  // Interactive mode - will prompt later
+  return undefined;
+}
+
+/**
+ * Determines the installation method (symlink vs copy).
+ * Priority: explicit --method flag > non-interactive default > undefined (will prompt)
+ */
+function getInstallationMethod(
+  options: AddOptions,
+  isNonInteractive: boolean
+): InstallMode | undefined {
+  // Explicit --method flag takes precedence
+  if (options.method) return options.method;
+
+  // Non-interactive default: symlink
+  if (isNonInteractive) return 'symlink';
+
+  // Interactive mode - will prompt later
+  return undefined;
+}
+
+/**
+ * Determines if final confirmation should be skipped.
+ * Returns true if --yes flag is present OR non-interactive mode is active.
+ */
+function shouldAutoConfirm(options: AddOptions, isNonInteractive: boolean): boolean {
+  return options.yes === true || isNonInteractive;
 }
 
 /**
@@ -1503,6 +1562,9 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
   const source = args[0];
   let installTipShown = false;
 
+  // Detect non-interactive mode
+  const isNonInteractive = isNonInteractiveMode(options);
+
   const showInstallTip = (): void => {
     if (installTipShown) return;
     p.log.message(
@@ -1653,7 +1715,8 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       const firstSkill = skills[0]!;
       p.log.info(`Skill: ${pc.cyan(getSkillDisplayName(firstSkill))}`);
       p.log.message(pc.dim(firstSkill.description));
-    } else if (options.yes) {
+    } else if (isNonInteractive || options.yes) {
+      // Non-interactive mode: select all skills
       selectedSkills = skills;
       p.log.info(`Installing all ${skills.length} skills`);
     } else {
@@ -1713,7 +1776,8 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       spinner.stop(`${totalAgents} agents`);
 
       if (installedAgents.length === 0) {
-        if (options.yes) {
+        // Non-interactive mode: select all agents when none detected
+        if (isNonInteractive || options.yes) {
           targetAgents = validAgents as AgentType[];
           p.log.info('Installing to all agents');
         } else {
@@ -1738,7 +1802,8 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
 
           targetAgents = selected as AgentType[];
         }
-      } else if (installedAgents.length === 1 || options.yes) {
+      } else if (installedAgents.length === 1 || isNonInteractive || options.yes) {
+        // Non-interactive mode: use detected agents
         targetAgents = installedAgents;
         if (installedAgents.length === 1) {
           const firstAgent = installedAgents[0]!;
@@ -1761,12 +1826,22 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       }
     }
 
-    let installGlobally = options.global ?? false;
+    // Determine installation scope using helper function
+    const scopeFromHelper = getInstallationScope(options, isNonInteractive);
+    let installGlobally =
+      scopeFromHelper !== undefined ? scopeFromHelper : (options.global ?? false);
 
     // Check if any selected agents support global installation
     const supportsGlobal = targetAgents.some((a) => agents[a].globalSkillsDir !== undefined);
 
-    if (options.global === undefined && !options.yes && supportsGlobal) {
+    // Only prompt if scope is not determined and not in non-interactive mode
+    if (
+      scopeFromHelper === undefined &&
+      options.global === undefined &&
+      !isNonInteractive &&
+      !options.yes &&
+      supportsGlobal
+    ) {
       const scope = await p.select({
         message: 'Installation scope',
         options: [
@@ -1792,10 +1867,12 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       installGlobally = scope as boolean;
     }
 
-    // Prompt for install mode (symlink vs copy)
-    let installMode: InstallMode = 'symlink';
+    // Determine installation method using helper function
+    const methodFromHelper = getInstallationMethod(options, isNonInteractive);
+    let installMode: InstallMode = methodFromHelper !== undefined ? methodFromHelper : 'symlink';
 
-    if (!options.yes) {
+    // Only prompt if method is not determined and not in non-interactive mode
+    if (methodFromHelper === undefined && !isNonInteractive && !options.yes) {
       const modeChoice = await p.select({
         message: 'Installation method',
         options: [
@@ -1883,7 +1960,10 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       // Silently skip — security info is advisory only
     }
 
-    if (!options.yes) {
+    // Use helper to determine if confirmation should be skipped
+    const autoConfirm = shouldAutoConfirm(options, isNonInteractive);
+
+    if (!autoConfirm) {
       const confirmed = await p.confirm({ message: 'Proceed with installation?' });
 
       if (p.isCancel(confirmed) || !confirmed) {
@@ -2204,6 +2284,26 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.list = true;
     } else if (arg === '--all') {
       options.all = true;
+    } else if (arg === '--non-interactive') {
+      options.nonInteractive = true;
+    } else if (arg === '--scope') {
+      i++;
+      const scopeValue = args[i];
+      if (scopeValue !== 'project' && scopeValue !== 'global') {
+        console.error(pc.red(`Invalid value for --scope: ${scopeValue}`));
+        console.error(pc.dim('Valid values: project, global'));
+        process.exit(1);
+      }
+      options.scope = scopeValue as 'project' | 'global';
+    } else if (arg === '--method') {
+      i++;
+      const methodValue = args[i];
+      if (methodValue !== 'symlink' && methodValue !== 'copy') {
+        console.error(pc.red(`Invalid value for --method: ${methodValue}`));
+        console.error(pc.dim('Valid values: symlink, copy'));
+        process.exit(1);
+      }
+      options.method = methodValue as 'symlink' | 'copy';
     } else if (arg === '-a' || arg === '--agent') {
       options.agent = options.agent || [];
       i++;

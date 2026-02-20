@@ -1,7 +1,7 @@
 {
-  "name": "skills",
+  "name": "edinsonnm-skills",
   "version": "1.4.0",
-  "description": "The open agent skills ecosystem",
+  "description": "The open agent skills ecosystem with non-interactive mode support",
   "type": "module",
   "bin": {
     "skills": "./bin/cli.mjs",
@@ -21,7 +21,7 @@
     "prepublishOnly": "npm run build",
     "format": "prettier --write 'src/**/*.ts' 'scripts/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'scripts/**/*.ts'",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "test": "vitest",
     "type-check": "tsc --noEmit",
     "publish:snapshot": "npm version prerelease --preid=snapshot --no-git-tag-version && npm publish --tag snapshot"
@@ -36,6 +36,9 @@
     "agent-skills",
     "skills",
     "ai-agents",
+    "non-interactive",
+    "automation",
+    "gravion",
     "amp",
     "antigravity",
     "augment",
@@ -80,13 +83,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel-labs/skills.git"
+    "url": "git+https://github.com/EdinsonNM/skills.git"
   },
-  "homepage": "https://github.com/vercel-labs/skills#readme",
+  "homepage": "https://github.com/EdinsonNM/skills#readme",
   "bugs": {
-    "url": "https://github.com/vercel-labs/skills/issues"
+    "url": "https://github.com/EdinsonNM/skills/issues"
   },
-  "author": "",
+  "author": "Edinson Moreno <edinsonm@gmail.com>",
   "license": "MIT",
   "devDependencies": {
     "@clack/prompts": "^0.11.0",

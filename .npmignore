@@ -1,0 +1,26 @@
+# Source files
+src/
+scripts/
+tests/
+
+# Config files
+.prettierrc
+.husky/
+tsconfig.json
+vitest.config.ts
+build.config.mjs
+
+# Development
+node_modules/
+*.log
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Keep these
+!dist/
+!bin/
+!README.md
+!ThirdPartyNoticeText.txt

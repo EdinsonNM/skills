@@ -209,7 +209,17 @@ export async function installSkillForAgent(
   const canonicalDir = join(canonicalBase, skillName);
 
   // Agent-specific location (for symlink)
-  const agentBase = isGlobal ? agent.globalSkillsDir! : join(cwd, agent.skillsDir);
+  // For universal agents in project scope, use agent-specific directory (e.g., .cursor/skills)
+  // instead of .agents/skills to create proper symlinks
+  let agentBase: string;
+  if (!isGlobal && isUniversalAgent(agentType)) {
+    // In project scope, universal agents should have their own directory
+    // e.g., cursor uses .cursor/skills instead of .agents/skills
+    const agentSpecificDir = `.${agent.name}/skills`;
+    agentBase = join(cwd, agentSpecificDir);
+  } else {
+    agentBase = isGlobal ? agent.globalSkillsDir! : join(cwd, agent.skillsDir);
+  }
   const agentDir = join(agentBase, skillName);
 
   const installMode = options.mode ?? 'symlink';
@@ -253,6 +263,8 @@ export async function installSkillForAgent(
     // For universal agents with global install, the skill is already in the canonical
     // ~/.agents/skills directory. Skip creating a symlink to the agent-specific global dir
     // (e.g. ~/.copilot/skills) to avoid duplicates.
+    // NOTE: In project scope, we ALWAYS create the symlink, even for universal agents,
+    // so that each agent can find skills in their own directory.
     if (isGlobal && isUniversalAgent(agentType)) {
       return {
         success: true,

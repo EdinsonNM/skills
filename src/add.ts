@@ -556,8 +556,8 @@ async function handleRemoteSkill(
       process.exit(1);
     }
 
-    // Always include universal agents
-    targetAgents = ensureUniversalAgents(options.agent as AgentType[]);
+    // Use only the explicitly specified agents (don't auto-add universal agents)
+    targetAgents = options.agent as AgentType[];
   } else {
     spinner.start('Loading agents...');
     const installedAgents = await detectInstalledAgents();

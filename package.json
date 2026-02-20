@@ -1,6 +1,6 @@
 {
   "name": "edinsonnm-skills",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "description": "The open agent skills ecosystem with non-interactive mode support",
   "type": "module",
   "bin": {
